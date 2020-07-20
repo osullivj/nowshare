@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script type="text/javascript">
+
+        const ws_sub_url = "ws://localhost:8090/ws/sub"
+        var pc;
+        var ws;
+		var pub_session_key;
+		var track_label;
+		var track_id;
+		var local_stream;		
+		var config = { /*
+			'iceServers': [
+				{ url: 'stun:stun.l.google.com:19302' },
+				{ url: 'stun:stun1.l.google.com:19302' },
+			] */
+		};		
+
+		function clearSessionKey( ) {
+			$("#sessionkey").val("");
+		};
+
+        async function start() {
+            closePeer();
+			pub_session_key = $("#sessionkey").val( );
+            const remoteVideo = document.querySelector('#videoCtl');
+			pc = new RTCPeerConnection( config);
+			pc.ontrack = function( ev) {
+				console.log( 'ontrack: ' + ev);
+				remoteVideo.srcObject = ev.streams[0];
+			};
+			
+            ws = new WebSocket(ws_sub_url);
+			
+            pc.addEventListener("icegatheringstatechange", (ev) => {
+                console.log('icegatheringstatechange state: ' + ev.target.iceGatheringState);
+                console.log(ev);                
+            }, false);
+
+            pc.addEventListener("icecandidate", (ev) => {
+                if (ev.candidate != null) {
+                    console.log( 'icecandidate: ' + ev.candidate);
+                    ws.send(JSON.stringify({
+                        'type': 'ice',
+                        'candidate': ev.candidate.candidate,
+                        'sdpMLineindex': ev.candidate.sdpMLineIndex,
+                        'sdpMid': ev.candidate.sdpMid,
+						'pub_session_key':pub_session_key
+                    }));
+                }
+            }, false);
+
+            ws.onmessage = async function (evt) {
+                console.log("websocket recv: " + evt.data);
+                let obj = JSON.parse(evt.data);
+                if (obj['type'] == 'ice') {
+                    console.log("remote ice candidate: " + obj['candidate']);
+                    pc.addIceCandidate({ candidate: obj['candidate'], sdpMid: obj['sdpMid'],
+														sdpMLineIndex:obj['sdpMLineIndex'] });
+                }
+                else if (obj['type'] == 'sub_response') {
+					let offer = obj['sdp'];
+                    console.log("sub_response.offer: " + offer);
+                    await pc.setRemoteDescription(new RTCSessionDescription( {type:'offer',sdp:offer}));
+					let answer = await pc.createAnswer( );
+					await pc.setLocalDescription( answer);
+					ws.send(JSON.stringify({ type: 'sub_answer', pub_session_key: pub_session_key, sdp:answer.sdp}));
+				}
+            };
+
+            ws.onopen = async function () {
+                ws.send(JSON.stringify({ type: 'sub_request', pub_session_key: pub_session_key}));
+            };
+        };
+
+        function closePeer() {
+            console.log("close peer");
+			if ( ws != null) {
+				ws.send(JSON.stringify({ 'type': 'sub_close', 'pub_session_key': pub_session_key}));
+				ws.close( );
+			}
+            if (pc != null) {
+                pc.close();
+            }
+        };
+
+    </script>
+</head>
+<body>
+
+    <video controls autoplay="autoplay" id="videoCtl" width="640" height="480"></video>
+
+    <div>
+        <button type="button" class="btn btn-success" onclick="start();">Start</button>
+        <button type="button" class="btn btn-success" onclick="closePeer();">Close</button>
+        <button type="button" class="btn btn-success" onclick="clearSessionKey();">Clear</button>		
+		<label for="sessionkey">Session key</label>
+		<input type="text" id="sessionkey" name="sessionkey" ></input>
+    </div>
+
+</body>

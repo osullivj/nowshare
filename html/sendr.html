@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script type="text/javascript">
+
+        const ws_pub_url = "ws://localhost:8090/ws/pub"
+		var peers = {};
+        var ws;
+		var pub_session_key;
+		var track_label;
+		var track_id;
+		var local_stream;
+		var config = { /*
+			'iceServers': [
+				{ url: 'stun:stun.l.google.com:19302' },
+				{ url: 'stun:stun1.l.google.com:19302' },
+			] */
+		};
+		var ice_candidates = {};
+
+        async function new_subscriber( sub_session_key) {
+            var pc = new RTCPeerConnection( config);
+			local_stream.getTracks().forEach(track => {
+                console.log('add local track ' + track.kind + ' to peer connection.');
+                console.log(track);
+                pc.addTrack(track, local_stream);
+				track_label = track.label;
+				track_id = track.id;
+            });
+			
+            pc.addEventListener("icegatheringstatechange", (ev) => {
+                console.log('icegatheringstatechange state: ' + ev.target.iceGatheringState);
+                console.log(ev);                
+            }, false);
+
+            pc.addEventListener("icecandidate", (ev) => {
+                if (ev.candidate != null) {
+                    console.log('icecandidate: ' + ev.candidate);
+                    ws.send(JSON.stringify({
+                        'type': 'ice',
+                        'candidate': ev.candidate.candidate,
+                        'sdpMLineindex': ev.candidate.sdpMLineIndex,
+                        'sdpMid': ev.candidate.sdpMid,
+						'sub_session_key':sub_session_key,
+						'pub_session_key':pub_session_key
+                    }));
+                }
+            }, false);
+			
+			return pc;
+		}
+
+        async function start() {
+            // closePeer();
+            const remoteVideo = document.querySelector('#videoCtl');
+            const mediaConstraints = { 'video': true, 'audio': false}
+            local_stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+            remoteVideo.srcObject = local_stream;
+
+            ws = new WebSocket(ws_pub_url);
+
+            ws.onmessage = async function (evt) {
+                console.log("websocket recv: " + evt.data);
+                let obj = JSON.parse(evt.data);
+                if (obj['type'] == 'ice') {
+					let sub_session_key = obj['sub_session_key'];
+					let pc = peers[sub_session_key];
+                    console.log("remote ice candidate: " + obj['candidate']);
+					if ( pc.remoteDescription == null) {
+						if ( sub_session_key in ice_candidates) {
+							candidates = ice_candidates[sub_session_key];
+							candidates.push( obj);
+						}
+						else {
+							ice_candidates[sub_session_key] = [obj];
+						}
+					}
+					else {
+						pc.addIceCandidate({ candidate: obj['candidate'], sdpMid: obj['sdpMid'], sdpMLineIndex:obj['sdpMLineIndex'] });
+					}
+                }
+				else if (obj['type'] == 'session') {
+					pub_session_key = obj['key'];
+					console.log("new_publisher.session_key:" + pub_session_key);
+					$("#sessionkey").text( pub_session_key);					
+				}
+				else if (obj['type'] == 'sub_request') {
+					let sub_session_key = obj['sub_session_key'];
+					let pc = await new_subscriber( sub_session_key);
+					let offer = await pc.createOffer( );
+					await pc.setLocalDescription( offer);
+					ws.send( JSON.stringify( { 'type': 'sub_response', 'sdp': offer.sdp,
+												'sub_session_key': sub_session_key}));
+					peers[sub_session_key] = pc;												
+				}
+				else if (obj['type'] == 'sub_answer') {
+					let sub_session_key = obj['sub_session_key'];
+					let pc = peers[sub_session_key];
+					await pc.setRemoteDescription( { type:'answer', sdp:obj.sdp});
+				}
+				else if (obj['type'] == 'sub_close') {
+					let sub_session_key = obj['sub_session_key'];
+					let pc = peers[sub_session_key];
+					pc.close( );
+					delete peers[sub_session_key];
+				}				
+                else {
+                    console.log( "UNEXPECTED type:" + obj['type']);
+                }
+            };
+
+            ws.onopen = async function () { };
+        };
+    </script>
+</head>
+<body>
+
+    <video controls autoplay="autoplay" id="videoCtl" width="640" height="480"></video>
+
+    <div>
+        <button type="button" class="btn btn-success" onclick="start();">Start</button>
+        <button type="button" class="btn btn-success" onclick="closePeer();">Close</button>
+		<label for="sessionkey">Session key</label>
+		<textarea id="sessionkey" name="sessionkey" rows="1" cols="50"></textarea> 		
+    </div>
+
+</body>
