@@ -10,13 +10,15 @@ class Sender extends React.Component {
             peers:{},
             local_stream:null,
             ice_candidates:{},
-            pub_session_key:null,
-            web_socket:null
+            pub_session_key:'',
+            web_socket:null,
+            rtc_config:{}
         };
+        this.start = this.start.bind( this)
     }
 
     async new_subscriber( sub_session_key) {
-        var pc = new RTCPeerConnection( this.props.config);
+        var pc = new RTCPeerConnection( this.state.rtc_config);
         this.state.local_stream.getTracks( ).forEach( track => {
             console.log('add local track ' + track.kind + ' to peer connection.');
             console.log(track);
@@ -47,7 +49,7 @@ class Sender extends React.Component {
         const mediaConstraints = { 'video': true, 'audio': false};
         this.state.local_stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
         remoteVideo.srcObject = this.state.local_stream;
-        this.state.web_socket = new WebSocket(this.props.ws_pub_url);
+        this.state.web_socket = new WebSocket(this.props.web_socket_url);
         this.state.web_socket.onmessage = async function (evt) {
             console.log("websocket recv: " + evt.data);
             let obj = JSON.parse(evt.data);
@@ -99,14 +101,17 @@ class Sender extends React.Component {
         };
     }
 
+    async close() {
+    }
+
     render() {
         return (
             <div>
-				<video controls autoplay="autoplay" ref="videoCtl" width="640" height="480"></video>			
-                <button type="button" class="btn btn-success" onClick="{this.start}">Start</button>
-                <button type="button" class="btn btn-success" onC-lick="{this.closePeer}">Close</button>
+				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
+                <button onClick={this.start}>Start</button>
+                <button onClick={this.close}>Stop</button>
         		<label>Session key</label>
-        		<textarea value={this.state.pub_session_key} rows="1" cols="50"></textarea>
+        		<textarea readOnly value={this.state.pub_session_key} rows="1" cols="50"></textarea>
             </div>
         );
     }
@@ -120,20 +125,21 @@ class Receiver extends React.Component {
             local_stream:null,
             ice_candidates:{},
             pub_session_key:null,
-            web_socket:null
+            web_socket:null,
+            rtc_config:{}
         };
     }
 
     async start() {
         this.closePeer();
         const remoteVideo = this.refs.videoCtl;
-	    this.state.peer = new RTCPeerConnection( this.props.config);
+	    this.state.peer = new RTCPeerConnection( this.state.rtc_config);
 		this.state.peer.ontrack = function( ev) {
 			console.log( 'ontrack: ' + ev);
 			remoteVideo.srcObject = ev.streams[0];
 		};
 
-        this.state.web_socket = new WebSocket(this.props.ws_sub_url);
+        this.state.web_socket = new WebSocket(this.props.web_socket_url);
 
         this.state.peer.addEventListener("icegatheringstatechange", (ev) => {
             console.log('icegatheringstatechange state: ' + ev.target.iceGatheringState);
@@ -198,11 +204,11 @@ class Receiver extends React.Component {
     render() {
         return (
             <div>
-				<video controls autoplay="autoplay" ref="videoCtl" width="640" height="480"></video>			
+				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
                 <form onSubmit={this.handleSubmit}>
-                    <button type="button" class="btn btn-success" onClick={this.start}>Start</button>
-                    <button type="button" class="btn btn-success" onClick={this.closePeer}>Close</button>
-                    <button type="button" class="btn btn-success" onClick={this.clearSessionKey}>Clear</button>
+                    <button onClick={this.start()}>Start</button>
+                    <button onClick={this.closePeer()}>Close</button>
+                    <button onClick={this.clearSessionKey()}>Clear</button>
         		    <label>Session key</label>
         		    <input type="text" value={this.state.pub_session_key}></input>
         		</form>
@@ -216,8 +222,8 @@ function App() {
     <div className="App">
       <header className="App-header">
         <Switch>
-            <Route exact path='/sendr' component={Sender}/>
-            <Route exact path='/recvr' component={Receiver}/>
+            <Route exact path='/sendr' web_socket_url="ws://localhost:8090/ws/pub" component={Sender}/>
+            <Route exact path='/recvr' web_socket_url="ws://localhost:8090/ws/sub" component={Receiver}/>
         </Switch>
       </header>
     </div>
