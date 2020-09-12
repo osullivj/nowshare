@@ -222,8 +222,12 @@ function App() {
     <div className="App">
       <header className="App-header">
         <Switch>
-            <Route exact path='/sendr' web_socket_url="ws://localhost:8090/ws/pub" component={Sender}/>
-            <Route exact path='/recvr' web_socket_url="ws://localhost:8090/ws/sub" component={Receiver}/>
+            <Route exact path='/sendr'>
+                <Sender web_socket_url='ws://localhost:8090/ws/pub'/>
+            </Route>
+            <Route exact path='/recvr'>
+                <Receiver web_socket_url='ws://localhost:8090/ws/sub'/>
+            </Route>
         </Switch>
       </header>
     </div>

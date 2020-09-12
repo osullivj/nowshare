@@ -28,6 +28,10 @@ class SigPubSocketHandler( WebSocketHandler):
         self.session_key = token_urlsafe( 32)
         self.__class__.session_cache[self.session_key] = self
 
+    def check_origin(self, origin):
+        # Allow web sock connections from pages served by other servers
+        return True
+
     def open( self):
         # The new publishing client has opened a websock. Let it know its session_key
         logging.info( 'SigPubSocketHandler.open: session_key:%s' % self.session_key)
@@ -67,6 +71,10 @@ class SigSubSocketHandler(WebSocketHandler):
         self.__class__.session_cache[self.sub_session_key] = self
         self.pub_session_key = None
         self.ice_candidates = []
+
+    def check_origin( self, origin):
+        # Allow web sock connections from pages served by other servers
+        return True
 
     def open( self):
         logging.info( 'SigSubSocketHandler.open')
