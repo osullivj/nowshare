@@ -49,7 +49,9 @@ class Sender extends React.Component {
         const mediaConstraints = { 'video': true, 'audio': false};
         this.state.local_stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
         remoteVideo.srcObject = this.state.local_stream;
+        // Create web socket, and add .state member so web sock event handlers can reach React state.
         this.state.web_socket = new WebSocket(this.props.web_socket_url);
+        this.state.web_socket.state = this.state;
         this.state.web_socket.onmessage = async function (evt) {
             console.log("websocket recv: " + evt.data);
             let obj = JSON.parse(evt.data);
@@ -140,6 +142,7 @@ class Receiver extends React.Component {
 		};
 
         this.state.web_socket = new WebSocket(this.props.web_socket_url);
+        this.state.web_socket.state = this.state;
 
         this.state.peer.addEventListener("icegatheringstatechange", (ev) => {
             console.log('icegatheringstatechange state: ' + ev.target.iceGatheringState);
@@ -206,9 +209,9 @@ class Receiver extends React.Component {
             <div>
 				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
                 <form onSubmit={this.handleSubmit}>
-                    <button onClick={this.start()}>Start</button>
-                    <button onClick={this.closePeer()}>Close</button>
-                    <button onClick={this.clearSessionKey()}>Clear</button>
+                    <button onClick={this.start}>Start</button>
+                    <button onClick={this.closePeer}>Close</button>
+                    <button onClick={this.clearSessionKey}>Clear</button>
         		    <label>Session key</label>
         		    <input type="text" value={this.state.pub_session_key}></input>
         		</form>
