@@ -14,7 +14,7 @@ class Sender extends React.Component {
             web_socket:null,
             rtc_config:{}
         };
-        this.start = this.start.bind( this)
+        this.start = this.start.bind( this);
     }
 
     async new_subscriber( sub_session_key) {
@@ -51,21 +51,23 @@ class Sender extends React.Component {
         remoteVideo.srcObject = this.state.local_stream;
         // Create web socket, and add .state member so web sock event handlers can reach React state.
         this.state.web_socket = new WebSocket(this.props.web_socket_url);
-        this.state.web_socket.state = this.state;
+        this.state.web_socket.parent = this;
         this.state.web_socket.onmessage = async function (evt) {
             console.log("websocket recv: " + evt.data);
             let obj = JSON.parse(evt.data);
             if (obj['type'] === 'ice') {
 		        let sub_session_key = obj['sub_session_key'];
-				let pc = this.state.peers[sub_session_key];
+				let pc = this.parent.state.peers[sub_session_key];
                 console.log("remote ice candidate: " + obj['candidate']);
 				if ( pc.remoteDescription == null) {
-					if ( sub_session_key in this.state.ice_candidates) {
-						let candidates = this.state.ice_candidates[sub_session_key];
+					if ( sub_session_key in this.parent.state.ice_candidates) {
+						let candidates = this.parent.state.ice_candidates[sub_session_key];
 						candidates.push( obj);
 					}
 					else {
-						this.state.ice_candidates[sub_session_key] = [obj];
+					    var new_candidate = {};
+					    new_candidate[sub_session_key] = [obj];
+						this.parent.setState({ice_candidates:{...this.parent.state.ice_candidates, ...new_candidate}});
 					}
 				}
 				else {
@@ -73,29 +75,34 @@ class Sender extends React.Component {
 				}
             }
 			else if (obj['type'] === 'session') {
-				this.state.pub_session_key = obj['key'];
-				console.log("new_publisher.session_key:" + this.state.pub_session_key);
+				this.parent.setState( {pub_session_key:obj['key']});
+				console.log("new_publisher.session_key:" + this.parent.state.pub_session_key);
 				// $("#sessionkey").text( this.state.pub_session_key);
 			}
 			else if (obj['type'] === 'sub_request') {
 				let sub_session_key = obj['sub_session_key'];
-				let pc = await this.new_subscriber( sub_session_key);
+				let pc = await this.parent.new_subscriber( sub_session_key);
 				let offer = await pc.createOffer( );
 				await pc.setLocalDescription( offer);
-				this.state.web_socket.send( JSON.stringify( { 'type': 'sub_response', 'sdp': offer.sdp,
+				this.send( JSON.stringify( { 'type': 'sub_response', 'sdp': offer.sdp,
 											'sub_session_key': sub_session_key}));
-				this.state.peers[sub_session_key] = pc;
+				var new_peer = {};
+				new_peer[sub_session_key] = pc;
+				this.parent.setState({peers:{...this.parent.state.peers, ...new_peer}});
+				// this.state.peers[sub_session_key] = pc;
 			}
 			else if (obj['type'] === 'sub_answer') {
 				let sub_session_key = obj['sub_session_key'];
-				let pc = this.state.peers[sub_session_key];
+				let pc = this.parent.state.peers[sub_session_key];
 				await pc.setRemoteDescription( { type:'answer', sdp:obj.sdp});
 			}
 			else if (obj['type'] === 'sub_close') {
 				let sub_session_key = obj['sub_session_key'];
-				let pc = this.state.peers[sub_session_key];
+				let peers = this.parent.state.peers;
+				let pc = peers[sub_session_key];
 				pc.close( );
-				delete this.state.peers[sub_session_key];
+				delete peers[sub_session_key];
+				this.parent.setState( {peers:peers})
 			}
             else {
                 console.log( "UNEXPECTED type:" + obj['type']);
@@ -126,10 +133,13 @@ class Receiver extends React.Component {
             peer:null,
             local_stream:null,
             ice_candidates:{},
-            pub_session_key:null,
+            pub_session_key:'',
             web_socket:null,
             rtc_config:{}
         };
+        this.start = this.start.bind( this);
+        this.closePeer = this.closePeer.bind( this);
+        this.handleChange = this.handleChange.bind( this);
     }
 
     async start() {
@@ -190,7 +200,7 @@ class Receiver extends React.Component {
                 pub_session_key: this.state.pub_session_key})
             );
         };
-    };
+    }
 
     closePeer() {
         console.log("close peer");
@@ -202,19 +212,21 @@ class Receiver extends React.Component {
         if ( this.state.peer != null) {
             this.state.peer.close();
         }
-    };
+    }
+
+    handleChange( ev) {
+        this.setState({pub_session_key:ev.target.value});
+    }
 
     render() {
         return (
             <div>
 				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
-                <form onSubmit={this.handleSubmit}>
-                    <button onClick={this.start}>Start</button>
-                    <button onClick={this.closePeer}>Close</button>
-                    <button onClick={this.clearSessionKey}>Clear</button>
-        		    <label>Session key</label>
-        		    <input type="text" value={this.state.pub_session_key}></input>
-        		</form>
+                <button onClick={this.start}>Start</button>
+                <button onClick={this.closePeer}>Close</button>
+                <button onClick={this.clearSessionKey}>Clear</button>
+      		    <label>Session key</label>
+        		<textarea value={this.state.pub_session_key} onChange={this.handleChange}></textarea>
             </div>
         );
     }
