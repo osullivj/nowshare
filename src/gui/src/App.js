@@ -115,12 +115,20 @@ class Sender extends React.Component {
 
     render() {
         return (
-            <div>
-				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
-                <button onClick={this.start}>Start</button>
-                <button onClick={this.close}>Stop</button>
-        		<label>Session key</label>
-        		<textarea readOnly value={this.state.pub_session_key} rows="1" cols="50"></textarea>
+            <div className="container">
+                <div className="jumbotron">
+    				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
+    			</div>
+    			<div>
+    			    <div className="form-group">
+                        <button className="btn btn-lg btn-success" onClick={this.start}>Start</button>
+                        <button className="btn btn-lg btn-danger" onClick={this.close}>Stop</button>
+                    </div>
+                    <div className="form-group">
+                        <label>Session</label>
+        		        <textarea className="form-control" readOnly value={this.state.pub_session_key} rows="1" cols="50"></textarea>
+        		    </div>
+        		</div>
             </div>
         );
     }
@@ -220,13 +228,21 @@ class Receiver extends React.Component {
 
     render() {
         return (
-            <div>
-				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
-                <button onClick={this.start}>Start</button>
-                <button onClick={this.closePeer}>Close</button>
-                <button onClick={this.clearSessionKey}>Clear</button>
-      		    <label>Session key</label>
-        		<textarea value={this.state.pub_session_key} onChange={this.handleChange}></textarea>
+            <div className="container">
+                <div className="jumbotron">
+    				<video controls autoPlay="autoplay" ref="videoCtl" width="640" height="480"></video>
+    			</div>
+    			<div>
+    			    <div className="form-group">
+                        <button className="btn btn-lg btn-success" onClick={this.start}>Start</button>
+                        <button className="btn btn-lg btn-danger" onClick={this.close}>Stop</button>
+                        <button className="btn btn-lg btn-info" onClick={this.clearSessionKey}>Clear</button>
+                    </div>
+                    <div className="form-group">
+                        <label>Session</label>
+        		        <textarea value={this.state.pub_session_key} onChange={this.handleChange} rows="1" cols="50"></textarea>
+        		    </div>
+        		</div>
             </div>
         );
     }
